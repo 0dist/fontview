@@ -1,0 +1,5 @@
+fonttools==4.44.0
+libsass==0.22.0
+PyQt6==6.6.1
+PyQt6_Frameless_Window==0.3.6
+PyQt6_sip==13.4.1
