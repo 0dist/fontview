@@ -214,8 +214,6 @@ class TreePath(QTreeView):
 				i.setChecked(False)
 
 
-
-			print(element["main"].mainStack.count())
 		super().mouseReleaseEvent(e)
 
 

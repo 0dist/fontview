@@ -537,7 +537,6 @@ class FamilyControls(QWidget):
 
 
 
-
 class FamilyLayout(QWidget):
     def __init__(self, data):
         super().__init__()
