@@ -1,0 +1,6 @@
+__pycache__
+main.build
+main.dist
+dist
+src
+data.json
