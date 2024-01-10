@@ -64,7 +64,7 @@ class Controls(QWidget):
 
         previewWrap = ComboBox(parent = self, edit = True, tabName = False, tab = False)
         previewWrap.setObjectName("preview-combo")
-        for i in ["The quick brown fox jumps over a lazy dog.", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", """!"#$%&'()*+,-./0123456789:;<=>?""", "¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿"]:
+        for i in ["The quick brown fox jumps over the lazy dog.", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", """!"#$%&'()*+,-./0123456789:;<=>?""", "¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿"]:
             previewWrap.addItem(data = i, text = i, default = True if DATA["fontPreview"] == i else False)
 
 
