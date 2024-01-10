@@ -63,7 +63,6 @@ class Controls(QWidget):
 
 
         previewWrap = ComboBox(parent = self, edit = True, tabName = False, tab = False)
-        previewWrap.setObjectName("preview-combo")
         for i in ["The quick brown fox jumps over the lazy dog.", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", """!"#$%&'()*+,-./0123456789:;<=>?""", "¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿"]:
             previewWrap.addItem(data = i, text = i, default = True if DATA["fontPreview"] == i else False)
 
@@ -72,6 +71,8 @@ class Controls(QWidget):
         # 1 = Qt.AlignmentFlag.AlignLeft, 2 = right
         alignBtns = [("\uE00A", 1), ("\uE00B", 4), ("\uE00C", 2)]
         alignment = QPushButton()
+        # adjust pixel smoothness to apppear sharper
+        alignment.setStyleSheet("font-size: 16px")
         [alignment.setText(i[0]) for i in alignBtns if DATA["align"] == i[1]]
         alignment.clicked.connect(lambda: self.loopValues(alignBtns, alignment, "align"))
 
@@ -106,7 +107,6 @@ class Controls(QWidget):
 
         layout.setStretchFactor(previewWrap, 6)
         self.setLayout(layout)
-
 
 
 

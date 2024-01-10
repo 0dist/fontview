@@ -11,11 +11,11 @@ QPushButton, QLineEdit, QToolTip, QListWidget, QTreeView, QTextEdit, QMenu {
 	border: none;
 }
 
-QPushButton#icon, QPushButton#row-icon, QPushButton#dropdown-icon, QPushButton#nav-icon, QPushButton#checkable-icon {
+QPushButton#icon, QPushButton#row-icon, QPushButton#dropdown-icon, QPushButton#nav-icon {
 	font-family: "fontview-icons";
 }
 
-QPushButton#icon:hover, QPushButton#button:hover, QPushButton#nav-icon:hover, QPushButton#checkable-icon:hover {
+QPushButton#icon:hover, QPushButton#button:hover, QPushButton#nav-icon:hover {
 	background-color: $hover;
 }
 
@@ -139,7 +139,7 @@ QWidget#family-controls, QWidget#controls {
 }
 
 
-
+/*
 QPushButton#checkable-icon {
 	color: $mid;
 }
@@ -147,7 +147,7 @@ QPushButton#checkable-icon:checked {
 	color: $foreground;
 }
 
-
+*/
 
 QLineEdit {
 	padding: 10px;

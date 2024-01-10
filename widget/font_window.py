@@ -482,7 +482,7 @@ class FamilyControls(QWidget):
 
 
         back = QPushButton("Back")
-        styles = QPushButton("Family")
+        styles = QPushButton("Styles")
         styles.clicked.connect(lambda: [familyStack.setCurrentIndex(0), self.setCheckedState(styles)])
 
 

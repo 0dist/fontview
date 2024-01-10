@@ -285,8 +285,10 @@ class Main(base):
 if __name__ == "__main__":
     app = QApplication([])
     element["app"] = app
-    # app.setWindowIcon(QIcon("resource/logo.ico"))
-    # ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('app') if sys.platform == "win32" else None
+
+    app.setWindowIcon(QIcon("resource/logo.ico"))
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("fontview") if element["platform"] == "win32" else None
+
     app.setStyleSheet(sass.compile(filename = "style.qss", output_style = "compressed"))
     main = Main()
     main.show()
