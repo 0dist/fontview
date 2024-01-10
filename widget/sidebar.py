@@ -132,22 +132,24 @@ class TreePath(QTreeView):
 				path = QDir.toNativeSeparators(root + "/" + f)
 				suffix = QFileInfo(path).suffix()
 				if suffix in ["ttf", "otf"]:
+					try:
+						ttFont = ttLib.TTFont(path)["name"]
+						typeface = ttFont.getDebugName(16) if ttFont.getDebugName(16) else ttFont.getDebugName(1)
 
-					ttFont = ttLib.TTFont(path)["name"]
-					typeface = ttFont.getDebugName(16) if ttFont.getDebugName(16) else ttFont.getDebugName(1)
-
-					file = QFileInfo(path)
-					item = TreeItem(file.completeBaseName())
-					for val, slot in [(path, 100), (suffix, 110), (typeface, 130)]:
-						item.setData(val, slot)
+						file = QFileInfo(path)
+						item = TreeItem(file.completeBaseName())
+						for val, slot in [(path, 100), (suffix, 110), (typeface, 130)]:
+							item.setData(val, slot)
 
 
-					appendTo = model
-					for i in dirList:
-						if root == i.data(100):
-							appendTo = i
-							break
-					appendTo.appendRow(item)
+						appendTo = model
+						for i in dirList:
+							if root == i.data(100):
+								appendTo = i
+								break
+						appendTo.appendRow(item)
+					except Exception as e:
+						print(e)
 
 		# restore tree state
 		self.iterateTree(func = "", parent = False)
@@ -236,13 +238,13 @@ class TreePath(QTreeView):
 				except Exception as e:
 					print(e)
 					# open without selection
-					QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(path)))
+					subprocess.Popen(["open", os.path.dirname(path)])
 			case "linux":
 				try:
 					subprocess.Popen(["xdg-open", "--select", path])
 				except Exception as e:
 					print(e)
-					QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(path)))
+					subprocess.Popen(["xdg-open", os.path.dirname(path)])
 
 
 
