@@ -138,11 +138,12 @@ class Controls(QWidget):
                 newc = QColor().fromHsl(h + 180 if h < 180 else h - 180, c.saturation(), 255 - c.lightness()).name()
 
                 qss = re.sub(i[1], ""+newc+"", qss)
-
             f.write(qss)
-            app = element["app"]
-            app.setStyleSheet(sass.compile(string = qss, output_style = "compressed"))
-            app.style().unpolish(app)
+            
+        app = element["app"]
+        app.setStyleSheet("")
+        app.setStyleSheet(sass.compile(string = qss, output_style = "compressed"))
+        app.style().unpolish(app)
 
 
 
