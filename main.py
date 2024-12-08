@@ -1,19 +1,23 @@
 
+
+
+
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import Qt, QSize, QRect, QUrl, QThread, QByteArray, QStringListModel, QFileInfo, QDir, QFile, QPoint, QRectF, QEvent, QItemSelectionModel, QDateTime, QFileDevice, QTimer
+from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
-import sys, ctypes, os, re, json, decimal, math, shutil, sass, codecs, unicodedata, subprocess
+import sys
+import ctypes
+import os
+import json
+import math
+import sass
+import subprocess
+import time
+import threading
 
-
+from datetime import datetime, timedelta
 from fontTools import ttLib
-from qframelesswindow import *
-
-
-element = {}
-
-element["platform"] = sys.platform
-base = FramelessWindow if element["platform"] == "win32" else QWidget
 
 
 
@@ -22,32 +26,125 @@ base = FramelessWindow if element["platform"] == "win32" else QWidget
 
 
 
-def openData():
-    global DATA
-    with open("data.json", "r") as file:
-        DATA = json.load(file)
-
-def initData():
-    global DATA
-    DATA = {}
-    for key, value in [("fontSize", 25), ("fontPreview", "The quick brown fox jumps over a lazy dog."), ("align", 1), ("grid", False), ("sidebarWidth", 300), ("sidebarHide", False), ("favorites", []), ("previewSize", 25), ("darkMode", False)]:
-        DATA[key] = value
-
-try:
-    openData()
-except:
-    initData()
 
 
 
 
-PADD = 10
 
 
-from widget.sidebar import *
+
+
+
+
+
+
+
+
+
+
+
+class FontGatherer(QThread):
+	finished = pyqtSignal(dict, str)
+	fontIndexed = pyqtSignal(str, int)
+
+	def __init__(self, path, filePaths=[]):
+		super().__init__()
+		self.path = path
+		self.filePaths = filePaths
+
+
+
+	def run(self):
+		startTime = time.perf_counter()
+		rawFont = QRawFont()
+		systemFonts = QFontDatabase.families()
+		fontData = {}
+		total = 0
+		parent = os.path.basename(self.path)
+
+
+
+		if not self.filePaths:
+			self.filePaths = [os.path.join(root, f) for root, _, files in os.walk(self.path) for f in files]
+
+		for path in self.filePaths:
+			suffix = os.path.splitext(os.path.basename(path))[1].lower()
+			if suffix in (".ttf", ".otf"):
+				try:
+					# skip variable fonts
+					if "fvar" not in (ttFont := ttLib.TTFont(path)):
+						nameTable = ttFont["name"]
+						if (family := nameTable.getDebugName(1)) == "false" or \
+						(fullName := nameTable.getDebugName(4)) == "false" or \
+						(typeface := nameTable.getDebugName(16) or family) == "false":
+							continue
+
+
+						if family not in systemFonts:
+							with open(path, "rb") as f:
+								rawFont.loadFromData(fontBytes := f.read(), 0, QFont.HintingPreference.PreferNoHinting)
+
+							# if the font family name exceeds 30 characters, qt may not recognize the font
+							QFontDatabase.addApplicationFont(path) if len(family) < 30 else QFontDatabase.addApplicationFontFromData(fontBytes)
+
+
+
+
+						weight = ttFont["OS/2"].usWeightClass
+						style = rawFont.style()
+
+						if typeface not in fontData:
+							fontData[typeface] = {"family": family, "fullName": fullName, "weight": weight, "path": path, "style": style, "type": set(), "fontFamily": {}, "folderPath": self.path}
+
+
+						fontData[typeface]["type"].add(suffix)
+						fontData[typeface]["fontFamily"][fullName] = {"family": family, "weight": weight, "path": path, "style": style}
+
+
+
+						if abs(400 - weight) <= abs(400 - fontData[typeface]["weight"]):
+							# if style == QFont.Style.StyleNormal and not any(s in fullName.lower() for s in ("round", "slant")):
+							if style == QFont.Style.StyleNormal:
+								fontData[typeface].update(family=family, fullName=fullName, weight=weight, path=path, style=style)
+
+
+
+
+						ttFont.close()
+						total += 1
+						self.fontIndexed.emit(parent, total)
+				except Exception as e:
+					print(e)
+	
+
+
+		self.finished.emit(fontData, self.path)
+		print(f"{time.perf_counter() - startTime:.6f}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from conf import *
 from widget.controls import *
+from widget.widgets import *
 from widget.font_window import *
+from widget.sidebar import *
 
+if (isWin := elem["platform"] == "win32"):
+	from widget.frameless import *
 
 
 
@@ -57,48 +154,15 @@ from widget.font_window import *
 
 
 
-class Thread(QThread):
-    def run(self):
-        element["main"].getFontData()
 
 
 
-class InitPath(QPushButton):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.raise_()
-        self.setObjectName("init-button")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setText("Select or Drop font directory")
-        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-        self.setAcceptDrops(True)
 
-        self.thread = Thread()
-        self.thread.finished.connect(self.finilizePath)
-        parent.wrapGrid.addWidget(self, 1 if parent.isWindows() else 0, 0)
 
-        self.clicked.connect(lambda: self.selectDir(QDir.toNativeSeparators(QFileDialog.getExistingDirectory(self, "Select font directory"))))
-        self.dropEvent = lambda e: self.selectDir(self.url)
 
 
-    def dragEnterEvent(self, e):
-        urls = e.mimeData().urls()
-        if len(urls) == 1:
-            url = urls[0].toLocalFile()
-            if os.path.isdir(url):
-                self.url = QDir.toNativeSeparators(url)
-                e.accept()
 
-    def selectDir(self, path):
-        if path:
-            DATA["path"] = path
-            self.thread.start()
-            self.setCursor(Qt.CursorShape.WaitCursor)
 
-    def finilizePath(self):
-        element["main"].generateFonts()
-        self.deleteLater()
 
 
 
@@ -109,158 +173,243 @@ class InitPath(QPushButton):
 
 
 
-class Main(base): 
-    def __init__(self):
-        super().__init__()
-        element["main"] = self
-        # all widgets recieve focus to ensure that the custom combobox is hidden when any element is clicked
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        QFontDatabase.addApplicationFont("resource/fontview-icons.ttf")
-        self.resetMargins = lambda l: l.setContentsMargins(0,0,0,0)
-        self.isWindows = lambda: element["platform"] == "win32"
 
-        self.wrapGrid = QGridLayout()
-        if self.isWindows():
-            self.wrapGrid.setSpacing(0)
-            self.wrapGrid.addWidget(self.titleBar, 0, 0)
-            self.titleBar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
 
-        self.splitter = QHBoxLayout()
-        self.splitter.setSpacing(0)
 
 
-        fontWindowLayout = QVBoxLayout()
-        fontWindowLayout.setSpacing(0)
-        for i in [self.wrapGrid, fontWindowLayout]:
-            self.resetMargins(i)
 
 
 
+class Main(Frameless if isWin else QWidget):
+	fontSizeChanged = pyqtSignal()
+	threadFinished = pyqtSignal(dict, str)
 
+	def __init__(self):
+		super().__init__()
+		elem["main"] = self
+		self.setObjectName("main")
 
-        self.mainStack = QStackedWidget()
-        self.scroll = ScrollLayout(grid = DATA["grid"], glyph = False, info = False)
-        self.mainStack.addWidget(self.scroll)
+		Tooltip(self)
+		Toast(self)
 
+		QFontDatabase.addApplicationFont(f"resource/{PARAM['iconsName']}.ttf")
+		self.updateStylesheet()
 
-        for i in [Controls(), self.mainStack]:
-            fontWindowLayout.addWidget(i)
 
 
-        self.splitter.addLayout(fontWindowLayout)
-        self.wrapGrid.addLayout(self.splitter, 1 if self.isWindows() else 0, 0)
+		layout = QVBoxLayout(contentsMargins=QMargins(), spacing=0)
+		layout.addWidget(Controls())
 
-        self.setLayout(self.wrapGrid)
-        self.setWindowGeometry()
-        [self.getFontData(), self.generateFonts()] if "path" in DATA else InitPath(self)
+		mainArea = QHBoxLayout(contentsMargins=QMargins(), spacing=0)
+		mainArea.addWidget(Sidebar())
 
+		fontWindow = elem["mainStack"] = QStackedWidget()
+		fontWindow.addWidget(ScrollArea())
+		mainArea.addWidget(fontWindow)
 
+		layout.addLayout(mainArea)
+		
+	
 
+		if isWin:
+			wrap = QVBoxLayout(contentsMargins=QMargins(), spacing=0)
+			wrap.addWidget(Titlebar(self))
+			wrap.addLayout(layout)
+			layout = wrap
 
-    def getFontData(self):
-        fontData = []
-        for root, dirs, files in os.walk(DATA["path"]):
-            for f in files:
-                path = QDir.toNativeSeparators(root + "/" + f)
-                suffix = QFileInfo(path).suffix()
-                if suffix in ["ttf", "otf"]:
-                    try:
-                        ttFont = ttLib.TTFont(path)
-                        # skip variable fonts
-                        if not "fvar" in ttFont:
-                            nameTable = ttFont["name"]
-                            family = nameTable.getDebugName(1)
-                            fullName = nameTable.getDebugName(4)
-                            typeface = nameTable.getDebugName(16) if nameTable.getDebugName(16) else family
 
-                            glyph = ttFont.getGlyphSet()
-                            width = glyph["a"].width if "a" in glyph else 0
+		self.setLayout(layout)
+		self.setAppGeometry()
 
 
-                            # qt wont recognize a family with name length over 31 on windows 10
-                            if len(family) > 29:
-                                family = family[:29]
-                                # copy original font -> rename temp font to a shorter name -> load temp font -> delete temp font
-                                self.renameFontFamily(family, path)
-                            else:
-                                QFontDatabase.addApplicationFont(path)
 
 
-                            rawFont = QRawFont(path, 0)
-                            weight = 100 if "thin" in str(nameTable.getDebugName(17)).lower() else rawFont.weight()
-                            italic = rawFont.style()
+		self.threadQueue = []
+		self.currentThread = None
 
+		for i in PREFS["folders"]:
+			self.queueThread(i)
 
-                            fontData.append({"family": family, "fullName": fullName, "typeface": typeface, "weight": weight, "italic": italic, "type": suffix, "width": width, "path": path}) if not "fvar" in ttFont else None
-                            ttFont.close()
 
-                    except Exception as e:
-                        print(e)
 
 
 
-        self.fontList = []
-        for t in sorted({t["typeface"] for t in fontData}):
-            fontFamily = [i for i in fontData if i["typeface"] == t]
-            fontType = sorted({i["type"] for i in fontFamily}, reverse = True)
-            # remove duplicates, (ttf from otf)
-            [fontFamily.remove(i) for i in fontFamily if [i["fullName"] for i in fontFamily].count(i["fullName"]) > 1]
-            fontFamily.sort(key = lambda x: (x["weight"], x["width"]))
 
+	
+		for seq, func in [
+		(QKeySequence.StandardKey.ZoomIn, self.scaleInterface),
+		("Ctrl+=", self.scaleInterface),
+		(QKeySequence.StandardKey.ZoomOut, lambda: self.scaleInterface(zoomOut=True)),
+		(QKeySequence.StandardKey.Find, elem["search"].setFocus),
+		]:
+			QShortcut(seq, self, autoRepeat=False).activated.connect(func)
 
-            # find closest to regular weight (400)
-            closest = lambda lst: min(lst, key = lambda i: abs(i["weight"] - 400))
-            if not all([i["italic"].value for i in fontFamily]):
-                # exclude italics
-                regular = closest([i for i in fontFamily if not i["italic"].value])
-            else:
-                regular = closest(fontFamily)
 
 
-            self.fontList.append({"typeface": t, "family": regular["family"], "fullName": regular["fullName"], "weight": regular["weight"], "italic": regular["italic"], "length": len(fontFamily), "types": fontType, "path": regular["path"], "fontFamily": fontFamily})
 
 
 
-    def generateFonts(self):
-        self.splitter.insertWidget(0, Sidebar(self.fontList))
-        for i in self.fontList:
-            row = TypefaceRow(data = i, family = False)
-            self.scroll.addWidget(row)
-     
 
-    def renameFontFamily(self, familyNew, path):
-        file = QFileInfo(path)
-        dst = file.absolutePath() + "/" + file.completeBaseName() + ".tmp"
-        shutil.copy2(path, dst)
 
-        ttFont = ttLib.TTFont(dst)
-        for i in ttFont["name"].names:
-            if i.nameID == 1:
-                i.string = familyNew
 
-        ttFont.save(dst)
-        with open(dst, "rb") as f:
-            QFontDatabase.addApplicationFontFromData(f.read())
-        os.remove(dst)
 
 
 
-    def setWindowGeometry(self):
-        try:
-            self.restoreGeometry(QByteArray.fromBase64(DATA["windowGeometry"].encode()))
-        except:
-             self.resize(self.screen().availableGeometry().size() / 1.7)
 
 
-    def saveData(self):
-        with open("data.json", "w") as f:
-            json.dump(DATA, f)
 
-    def closeEvent(self, e):
-        DATA["windowGeometry"] = bytearray(self.saveGeometry().toBase64()).decode("utf-8")
-        element["sidebar"].tree.iterateTree(func = "save", parent = False) if "path" in DATA else None
-        self.saveData()
-        
+	def queueThread(self, path):
+		fontThread = FontGatherer(path)
+		fontThread.finished.connect(lambda data, path: (
+			self.populate(data), 
+			self.processThreads(), 
+			self.threadFinished.emit(data, path),
+			elem["mainStack"].currentWidget().update()
+			))
+		fontThread.fontIndexed.connect(lambda parent, n: elem["toast"].notify(f"Found {n} fonts in {parent}"))
+
+		self.threadQueue.append(fontThread)
+		if self.currentThread is None:
+			self.processThreads()
+
+
+
+	def processThreads(self):
+		if self.currentThread:
+			self.currentThread.wait()
+			self.currentThread = None
+
+		if self.threadQueue:
+			self.currentThread = self.threadQueue.pop(0)
+			self.currentThread.start()
+
+
+	def populate(self, data):
+		for n, i in enumerate(data.items()):
+			elem["mainStack"].widget(0).addWidget(FontRow(i, isLast=n==len(data) - 1))
+
+
+
+
+
+
+
+
+
+
+
+	def setAppGeometry(self):
+		geom = DATA.get("appGeometry", {})
+
+		if geom.get("rect"):
+			self.setGeometry(QRect(*geom["rect"]))
+		else:
+			screenGeom = self.screen().availableGeometry()
+			appGeom = QRect(QPoint(), screenGeom.size() / 1.5)
+			appGeom.moveCenter(screenGeom.center())
+			self.setGeometry(appGeom)
+
+		if geom.get("max"):
+			self.showMaximized()
+
+
+
+
+
+	def scaleInterface(self, zoomOut=False):
+		PREFS["fontSize"] = max(12, min(PREFS["fontSize"] + (1 if not zoomOut else -1), 40))
+		self.updateStylesheet()
+
+
+
+
+
+
+
+
+
+	def updateStylesheet(self):
+		PARAM["margin"] = int(PREFS["fontSize"] * SC_FACTOR["margin"])
+
+		# init relative colors
+		for base, key, val in [
+			("foreground", "mid", 120), 
+			("background", "selected", 30), 
+			("foreground", "selected-inverted", 100), 
+			("background", "background-selection", 30),
+			]:
+			(color := QColor(COLOR[base])).setHsv(color.hue(), color.saturation() ,(v := color.value()) + (val if v <= 255 - val else -val))
+			COLOR[key] = color.name()
+
+
+
+
+
+		values = [
+			(PREFS, "fontSize"),
+			(PARAM, "iconsName"),
+			(PARAM, "margin"),
+			(PREFS, "font"),
+
+			(COLOR, "foreground"),
+			(COLOR, "border"),
+			(COLOR, "background"),
+			(COLOR, "background-selection"),
+
+			(COLOR, "mid"),
+			(COLOR, "selected"),
+			(COLOR, "selected-inverted"),
+
+		]
+
+		with open("resource/style.css", "r") as f:
+			css = f.read()
+			for dictName, key in values:
+				css = css.replace(f"{{{key}}}", str(dictName[key]))
+			app.setStyleSheet(sass.compile(string=css, output_style="compressed"))
+
+		self.fontSizeChanged.emit()
+
+
+
+
+
+
+
+
+
+
+
+
+	def closeEvent(self, e):
+		DATA["appGeometry"] = {"rect": self.geometry().getRect() if not self.isMaximized() else DATA.get("appGeometry", {}).get("rect"), "max": self.isMaximized()}
+
+
+		DATA.update(PREFS)
+		DATA.update({k: v for k, v in COLOR.items() if k not in ("mid", "selected", "selected-inverted", "background-selection")})
+		self.saveData()
+
+
+	def saveData(self):
+		with open("data.json", "w") as f:
+			json.dump(DATA, f)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -283,14 +432,19 @@ class Main(base):
 
 
 if __name__ == "__main__":
-    app = QApplication([])
-    element["app"] = app
+	app = QApplication([])
+	elem["app"] = app
 
-    app.setWindowIcon(QIcon("resource/logo.ico"))
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("fontview") if element["platform"] == "win32" else None
+	setFontConf()
+	app.setWindowIcon(QIcon("resource/logo.ico"))
+	app.setEffectEnabled(Qt.UIEffect.UI_AnimateMenu, False)
 
-    app.setStyleSheet(sass.compile(filename = "style.qss", output_style = "compressed"))
-    main = Main()
-    main.show()
 
-    sys.exit(app.exec())
+	if isWin:
+		ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("fontview")
+
+
+
+	main = Main()
+	main.show()
+	sys.exit(app.exec())

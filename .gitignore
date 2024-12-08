@@ -1,6 +1,4 @@
 __pycache__
-main.build
-main.dist
-dist
+build
 src
 data.json

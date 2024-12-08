@@ -1,0 +1,341 @@
+
+
+
+
+
+
+$font-size: {fontSize}px;
+$icon-font: {iconsName};
+$margin: {margin}px;
+
+
+$foreground: {foreground};
+$background: {background};
+$mid: {mid};
+
+$selected: {selected};
+$selected-inverted: {selected-inverted};
+$background-selection: {background-selection};
+
+$outline: 1px solid {border};
+$outline-invert: 1px solid $background;
+
+
+
+
+
+
+
+
+
+
+
+* {
+	font-family: {font};
+	font-size: $font-size;
+	color: $foreground;
+	background-color: transparent;
+	outline: 0;
+	border: 0;
+
+/*	selection-color: $foreground-text;*/
+	selection-background-color: $background-selection;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+QPushButton, QLabel {
+	padding: $margin;
+}
+
+QLineEdit {
+ 	padding: 0 $margin;
+}
+
+QPushButton#icon-button, QPushButton#icon-row {
+	padding: $margin;
+	font-family: $icon-font;
+}
+
+
+
+QPushButton:checked {
+	background-color: $selected;
+}
+
+
+
+
+
+
+QWidget#main {
+	background-color: $background;
+}
+
+
+QWidget#sidebar {
+	border-right: $outline;
+}
+
+
+
+
+
+
+
+
+
+QWidget#controls, QWidget#family-controls, QPushButton#sidebar-btn, QWidget#sidebar-container > QPushButton, QLabel#label-section, QWidget#titlebar {
+	border-bottom: $outline;
+}
+
+
+QWidget#controls > QPushButton, QSlider, QWidget#family-controls > QPushButton, QWidget#glyph-controls > *, QWidget#preview-controls > QWidget, QWidget#table-names > *, QWidget#feature-wrap > * {
+	border-right: $outline;
+}
+
+
+/*
+QWidget#controls > QPushButton#icon-button:hover, QWidget#family-controls > QPushButton:hover, QWidget#glyph-controls > QPushButton:hover, QPushButton#text-button:hover {
+	background-color: $selected;
+}*/
+
+
+
+
+
+
+
+
+QWidget#glyph-controls, QWidget#preview-controls, QWidget#table-names, QWidget#feature-wrap {
+	border-top: $outline;
+}
+
+
+QWidget#preview-controls QSlider {
+	padding-left: 0;
+}
+
+
+QWidget#family-info > QLineEdit {
+	padding: $margin;
+}
+
+
+QWidget#family-info QLabel#table-name {
+	border: $outline;
+	border-left: 0;
+	border-right: 0;
+}
+
+
+
+
+
+
+
+
+
+
+QSlider#slider {
+	padding: $margin;
+}
+
+
+QSlider#slider::groove:horizontal {
+	background-color: $foreground; 
+	height: 2px;
+}
+
+QSlider#slider::handle:horizontal {
+	background-color: $background;
+	border: 2px solid $foreground;
+	width: $font-size - 2; 
+	margin: - floor($font-size / 2) 0; 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+QLabel#tooltip, QLabel#toast, QDialog#frameless-dialog {
+	background-color: $foreground;
+	border: $outline-invert;
+	color: $background;
+}
+
+
+
+
+
+
+
+QDialog#dropdown, QMenu {
+	background-color: $background;
+}
+
+
+
+QPushButton#dropdown-row, QPushButton#icon-row, QMenu > QPushButton {
+	text-align: left;
+	color: $background;
+	background-color: $foreground;
+}
+
+QPushButton#icon-row {
+	text-align: center;
+}
+
+QPushButton#sidebar-btn, QPushButton#scroll-item > QPushButton, QPushButton#color {
+	text-align: left;
+}
+
+
+QSlider#slider::handle:horizontal:hover, QPushButton#compound-row, QLineEdit#preview-input, QDialog QScrollBar {
+	background-color: $foreground;
+
+}
+
+QPushButton#compound-row > * {
+	background-color: transparent;
+	color: $background;
+}
+
+
+
+
+/*QPushButton#dropdown-row:hover, QPushButton#dropdown-row:checked, QPushButton#icon-row:hover, QLineEdit#preview-input, QPushButton#compound-row:hover, QPushButton#compound-row:checked {
+	background-color: $selected-inverted;
+}
+*/
+QPushButton#dropdown-row:checked, QPushButton#compound-row:checked, QListWidget#font-list::item:selected {
+	background-color: $selected-inverted;
+}
+
+
+
+
+
+QLineEdit#preview-input {
+ 	color: $background;
+}
+
+
+QLineEdit#collection-input {
+ 	background-color: $background;
+ 	margin-bottom: 1px;
+}
+
+
+QLineEdit#preview-input, QLineEdit#collection-input {
+ 	margin-left: -2px;
+}
+
+
+
+
+QDialog QScrollBar::handle:vertical {
+	background-color: $selected-inverted;
+}
+
+
+
+
+
+
+
+
+QFrame#dialog-frame * {
+	color: $background;
+}
+
+
+QLineEdit#search-font, QListWidget#font-list::item {
+	background-color: $foreground;
+	padding: $margin;
+}
+
+
+QListWidget#font-list::item, QLineEdit#search-font {
+	border-bottom: $outline-invert;
+}
+
+
+QListWidget#font-list QScrollBar:vertical {
+	border-left: $outline-invert;
+}
+
+
+
+
+
+
+
+
+
+
+QScrollArea#item-scroll QScrollBar:vertical, QScrollArea#main-scroll QScrollBar:vertical, QTextEdit QScrollBar:vertical {
+	border-left: $outline;
+}
+
+
+
+
+
+
+
+QScrollBar:vertical {
+	margin: 0; 
+	width: $font-size; 
+}
+
+QScrollBar:horizontal {
+	margin: 0; 
+	height: $font-size; 
+}
+
+QScrollBar::handle:vertical {
+	background-color: $selected; 
+	min-height: $font-size;
+}
+
+QScrollBar::handle:horizontal {
+	background-color: $selected; 
+	min-width: $font-size;
+}
+
+
+QScrollBar, QScrollBar::sub-page, QScrollBar::add-page, QScrollBar::sub-line, QScrollBar::add-line {
+	background-color: transparent;
+}
+
+QScrollBar::sub-line, QScrollBar::add-line {
+	height: 0; 
+}
+

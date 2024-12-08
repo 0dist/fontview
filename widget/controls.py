@@ -4,7 +4,9 @@
 
 
 from main import *
-from widget.font_window import *
+
+
+
 
 
 
@@ -18,209 +20,347 @@ from widget.font_window import *
 
 
 class Controls(QWidget):
-    def __init__(self):
-        super().__init__()
-        element["controls"] = self
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        self.setObjectName("controls")
-        self.setFixedHeight(40)
+	def __init__(self):
+		super().__init__()
+		elem["controls"] = self
+		self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+		self.setObjectName("controls")
 
-        layout = QHBoxLayout()
-        layout.setSpacing(0)
-        element["main"].resetMargins(layout)
-
-        element["app"].setEffectEnabled(Qt.UIEffect.UI_AnimateTooltip, False)
-        element["app"].setEffectEnabled(Qt.UIEffect.UI_AnimateMenu, False)
-
-
-
-        toggleSide = QPushButton("\uE007")
-        toggleSide.clicked.connect(lambda: self.toggleSidebar(toggleSide))
-
-
-        self.slide = QSlider(Qt.Orientation.Horizontal)
-        self.slide.setObjectName("slider")
-        self.slide.setRange(4, 20)
-        self.slide.setValue(round(DATA["fontSize"] / 5))
-        self.slide.valueChanged.connect(self.resizeFonts)
-
-        self.fontSize = QLabel()
-        self.calcFontSize = lambda val: ""+str(val)+"px / "+str(round(val * 0.75, 2))+"pt"
-        self.fontSize.setText(self.calcFontSize(DATA["fontSize"]))
-
-
-
-        viewBtns = [("\uE008", False), ("\uE009", True)]
-        view = QPushButton(viewBtns[0][0] if not DATA["grid"] else viewBtns[1][0])
-        view.clicked.connect(lambda: self.loopValues(viewBtns, view, ""))
-
-
-        # viewBtns = [listView := QPushButton("\uE008"), gridView := QPushButton("\uE009")]
-        # for b, val in [(listView, False), (gridView, True)]:
-        #     b.clicked.connect(lambda e, val=val: self.changeLayout(val))
-
-        #     b.clicked.connect(lambda e, b=b: [i.setChecked(True) if b == i else i.setChecked(False) for i in viewBtns])
-
-
-        previewWrap = ComboBox(parent = self, edit = True, tabName = False, tab = False)
-        for i in ["The quick brown fox jumps over the lazy dog.", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", """!"#$%&'()*+,-./0123456789:;<=>?""", "¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿"]:
-            previewWrap.addItem(data = i, text = i, default = True if DATA["fontPreview"] == i else False)
-
-
-
-        # 1 = Qt.AlignmentFlag.AlignLeft, 2 = right
-        alignBtns = [("\uE00A", 1), ("\uE00B", 4), ("\uE00C", 2)]
-        alignment = QPushButton()
-        # adjust pixel smoothness to apppear sharper
-        alignment.setStyleSheet("font-size: 16px")
-        [alignment.setText(i[0]) for i in alignBtns if DATA["align"] == i[1]]
-        alignment.clicked.connect(lambda: self.loopValues(alignBtns, alignment, "align"))
-
-        # for b, flag in [(left, 1), (center, 4), (right, 2)]:
-        #     b.clicked.connect(lambda e, flag=flag: self.alignRows(flag))
-
-            # b.clicked.connect(lambda e, b=b: [i.setChecked(True) if b == i else i.setChecked(False) for i in alignBtns])
-            # [b.setCheckable(True), b.setChecked(True)] if DATA["align"] == flag else None
-
-
-        self.search = QLineEdit()
-        self.search.setObjectName("search")
-        self.search.setPlaceholderText("Search fonts")
-        self.search.textEdited.connect(self.searchItems)
-
-
-        theme = QPushButton()
-        self.setIconTheme = lambda: theme.setText("\uE013" if DATA["darkMode"] else "\uE014")
-        self.setIconTheme()
-        theme.clicked.connect(self.invertTheme)
-
-    
-
-
-        for i in [toggleSide, view, alignment, theme]:
-            i.setObjectName("icon")
-  
-        for i in [toggleSide, previewWrap, self.slide, self.search, view, alignment, theme]:
-            i.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
-            layout.addWidget(i)
-            layout.setStretchFactor(i, 1)
-
-        layout.setStretchFactor(previewWrap, 6)
-        self.setLayout(layout)
+		layout = QHBoxLayout(contentsMargins=QMargins(0,0,0,1), spacing=0)
 
 
 
 
-    def toggleSidebar(self, button):
-        sidebar = element["sidebar"]
-        if not sidebar.isHidden():
-            sidebar.hide()
-            DATA["sidebarHide"] = True
-        else:
-            sidebar.show()
-            DATA["sidebarHide"] = False
-        # remove hover state
-        button.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, False)
+
+		sidebar = QPushButton(ICON["sidebar"])
+		sidebar.clicked.connect(lambda: (
+			(side := elem["sidebar"]).setVisible(side.isHidden()),
+			DATA.update(hideSidebar=side.isHidden()),
+			))
 
 
 
-    def invertTheme(self):
-        DATA["darkMode"] = True if not DATA["darkMode"] else False
-        self.setIconTheme()
-        with open("style.qss", "r+") as f:
-            qss = f.read()
-            f.seek(0) 
-            f.truncate()
-
-            for i in re.findall("\$(.*):.*(\#.*);", qss):
-                c = QColor(i[1])
-                h = c.hue()
-                newc = QColor().fromHsl(h + 180 if h < 180 else h - 180, c.saturation(), 255 - c.lightness()).name()
-
-                qss = re.sub(i[1], ""+newc+"", qss)
-            f.write(qss)
-            
-        app = element["app"]
-        app.setStyleSheet("")
-        app.setStyleSheet(sass.compile(string = qss, output_style = "compressed"))
-        app.style().unpolish(app)
 
 
 
-    def restoreStates(self):
-        self.alignRows(DATA["align"])
-        self.setPreviewText(DATA["fontPreview"])
-        self.resizeFonts(round(DATA["fontSize"] / 5))
-        self.changeLayout(DATA["grid"])
-
-        self.search.setEnabled(True)
-
-        # preserve search state when family is closed with "back" button
-        if self.sender() and self.sender().isCheckable():
-            self.search.clear()
-            if not all([i.isVisible() for i in self.currentWidget().items]):
-                self.searchItems("")
+		self.preview = LineEdit(PREFS["preview"], objectName="controls-input", placeholder="Set preview")
+		self.preview.contextMenuEvent = lambda _: None
 
 
+		updateTimer = QTimer(self)
+		updateTimer.setSingleShot(True)
+		updateTimer.setInterval(300)
+		updateTimer.timeout.connect(lambda: elem["mainStack"].currentWidget().update() if "mainStack" in elem else None)
 
-    def loopValues(self, btns, button, func):
-        index = [n for n, i in enumerate(btns) if button.text() == i[0]][0]
-        index = 0 if button.text() == btns[-1][0] else index + 1
 
-        button.setText(btns[index][0])
-        self.alignRows(btns[index][1]) if func == "align" else self.changeLayout(btns[index][1])
+		self.preview.textChanged.connect(lambda text: (
+			# (self.preview.blockSignals(True), self.preview.setText(PARAM["preview"]), self.preview.blockSignals(False)) if not text else None,
+			PREFS.update(preview=text.replace("\n", "")[:150]),
+			updateTimer.start()
+			))
+
+
+		initDrop = QPushButton(ICON["dropdown"], objectName="icon-button")
+		initDrop.clicked.connect(self.changePreview)
+		self.previewWrap = CompoundWidget([self.preview, initDrop], checkable=False)
 
 
 
-    def searchItems(self, text):
-        scroll = self.currentWidget()
-        name = "typeface" if not "family" in element else "fullName"
-        for i in scroll.items:
-            if not text.lower() in i.data[name].lower():
-                scroll.layout.removeWidget(i)
-                i.hide()
-            else:
-                scroll.layout.addWidget(i)
-                i.show()
-
-
-    def changeLayout(self, val):
-        # family is "list" only
-        if not "family" in element:
-            flowLayout = self.currentWidget().layout
-            flowLayout.grid = val
-            flowLayout.update()
-            DATA["grid"] = val
-
-
-    def alignRows(self, flag):
-        [i.label.setAlignment(flag | Qt.AlignmentFlag.AlignVCenter) for i in self.currentWidget().items]
-        DATA["align"] = flag
-
-
-    def resizeFonts(self, val):
-        val = val * 5
-        [i.setFontSize(val) for i in self.currentWidget().items]
-
-        QToolTip.showText(QPoint(QCursor.pos().x(), QCursor.pos().y() + 10), self.calcFontSize(val)) if self.sender() == self.slide else None
-        # self.fontSize.setText(self.calcFontSize(val))
-        DATA["fontSize"] = val
-
-
-    def setPreviewText(self, text):
-        # remove new lines
-        text = "".join(text.splitlines())
-        [i.label.setText(text) if text else i.label.setText(i.data["typeface"]) for i in self.currentWidget().items]
-        DATA["fontPreview"] = text
 
 
 
-    def currentWidget(self):
-        if "family" in element:
-            scroll = element["family"].scroll
-        else:
-            scroll = element["main"].mainStack.currentWidget()
-        return scroll
+
+		tip = elem["tooltip"]
+
+		slider = QSlider(Qt.Orientation.Horizontal)
+		slider.setObjectName("slider")
+		slider.setRange(30, 100)
+		slider.focusOutEvent = lambda _: tip.hide()
+		slider.sliderReleased.connect(tip.hide)
+
+		updateLayouts = lambda: [elem["mainStack"].widget(i).updateLayout() for i in range(elem["mainStack"].count())]
+
+
+		slider.setValue(PREFS["rowFontSize"])
+		slider.valueChanged.connect(lambda val: (
+			PREFS.update(rowFontSize=val),
+			updateLayouts(),
+			tip.update(PREFS["rowFontSize"], widget=self, isFont=True)
+		))
+
+
+
+
+
+
+
+		self.search = LineEdit(objectName="controls-input", placeholder="Search fonts")
+		elem["search"] = self.search
+		self.search.textChanged.connect(lambda text: debounce.start())
+
+		clearSearch = QPushButton(ICON["close"], objectName="icon-button")
+		clearSearch.hide()
+		clearSearch.clicked.connect(lambda: (self.search.clear(), clearSearch.hide()))
+		self.searchWrap = CompoundWidget([self.search, clearSearch])
+
+		debounce = QTimer(self)
+		debounce.setSingleShot(True)
+		debounce.setInterval(300)
+		debounce.timeout.connect(lambda: (
+			elem["mainStack"].currentWidget().searchItems(self.search.text()), 
+			elem["mainStack"].widget(0).searchItems(text) if not (text := self.search.text()) else None,
+			clearSearch.setVisible(bool(text))
+			))
+
+
+
+
+
+
+		layoutType = QPushButton()
+		updateIcon = lambda: layoutType.setText(ICON["listLayout" if PREFS["listLayout"] else "gridLayout"])
+		updateIcon()
+
+
+		layoutType.clicked.connect(lambda: (
+			PREFS.update(listLayout=not PREFS["listLayout"]),
+			updateIcon(),
+			updateLayouts()
+			))
+
+
+
+
+
+
+
+		alignVal = {1: ICON["alignLeft"], 4: ICON["alignMid"], 2: ICON["alignRight"]}
+
+		align = QPushButton(alignVal[PREFS["rowAlign"]])
+		align.clicked.connect(lambda: (
+			PREFS.update(rowAlign=list(alignVal)[(list(alignVal).index(PREFS["rowAlign"]) + 1) % len(alignVal)]),
+
+			align.setText(alignVal[PREFS["rowAlign"]]),
+			elem["mainStack"].currentWidget().repaint()
+			))
+
+
+
+
+
+
+
+
+		self.sortValues = {
+		"Name (A-Z)": ("nameLow", False), 
+		"Name (Z-A)": ("nameLow", True), 
+		"Family size (1-9)": ("familyLen", False), 
+		"Family size (9-1)": ("familyLen", True)
+		}
+
+		self.sortBtn = QPushButton(ICON["sort"])
+		self.sortBtn.clicked.connect(self.sortLayout)
+
+
+
+
+		self.features = QPushButton(ICON["features"])
+		self.features.clicked.connect(self.setFontFeature)
+
+
+		self.settings = QPushButton(ICON["settings"])
+		self.settings.clicked.connect(self.initSettings)
+		self.settings.setStyleSheet("border: 0")
+
+
+
+
+	
+
+
+		for i in sidebar, self.previewWrap, slider,  self.searchWrap, layoutType, align, self.sortBtn, self.features, self.settings:
+			i.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+			
+			if i in (self.previewWrap, self.searchWrap, slider):
+				layout.addWidget(i, stretch=3 if i != self.searchWrap else 2)
+			else:
+				i.setObjectName("icon-button")
+				layout.addWidget(i, stretch=1)
+
+		self.setLayout(layout)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	def sortLayout(self):
+		current = next(key for key, value in self.sortValues.items() if value == tuple(PREFS["sort"]))
+
+		DropdownMenu(self, self.sortBtn, list(self.sortValues), [current]).rowClicked.connect(lambda val: (
+			PREFS.update(sort=self.sortValues[val]),
+			[elem["mainStack"].widget(i).scrollLayout.sort() for i in range(elem["mainStack"].count())]
+			))
+
+
+
+
+
+
+	def setFontFeature(self):
+		features = ["liga", "kern", "smcp", "c2sc", "onum", "lnum", "tnum", "pnum", "frac", "sups", "subs", "dlig", "swsh", "ss01", "calt"]
+
+		menu = DropdownMenu(self, self.features, features, PREFS["features"], canAdd=True, keepOpen=True, userRows=PREFS["userFeatures"], key="userFeatures")
+		menu.rowClicked.connect(lambda val: (
+			PREFS.update(features=list(set(PREFS["features"]) ^ {val})),
+			[elem["mainStack"].widget(i).setFontFeatures() for i in range(elem["mainStack"].count())]
+			))
+
+		menu.rowRemoved.connect(lambda val: (
+			PREFS.update(features=[i for i in PREFS["features"] if i != val]),
+			[elem["mainStack"].widget(i).setFontFeatures() for i in range(elem["mainStack"].count())]
+			))
+
+
+
+
+
+
+
+	def changePreview(self):
+		previews = [
+		"The quick brown fox jumps over the lazy dog",
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+		"0123456789",
+		"""!@#$%^&()+-={}[]|\\:;\"'<>,.?/~""",
+		]
+
+
+		DropdownMenu(self, self.previewWrap, previews, [PREFS["preview"]], fixedWidth=True, canAdd=True, userRows=PREFS["userPreviews"], key="userPreviews").rowClicked.connect(lambda val: (
+			PREFS.update(preview=val),
+			self.preview.setText(PREFS["preview"]),
+			elem["mainStack"].currentWidget().update()
+			))
+
+
+
+
+
+
+
+
+
+
+	def initSettings(self):
+		resetTheme = QPushButton(ICON["reset"], objectName="icon-button")
+		resetTheme.clicked.connect(lambda: (
+			COLOR.update({k: PARAM[k] for k in COLOR if k in PARAM}),
+			[styleBtn(btn, key) for key, (btn, _) in colorElems.items()],
+			elem["main"].updateStylesheet()
+			))
+
+		invertTheme = QPushButton(ICON["invert"], objectName="icon-button")
+		invertTheme.clicked.connect(lambda: (self.setTheme(), [styleBtn(btn, key) for key, (btn, _) in colorElems.items()]))
+		theme = CompoundWidget([QLabel("Theme"), invertTheme, resetTheme], objectName="compound-row", checkable=False)
+
+
+
+
+
+		resetFont = QPushButton(ICON["reset"], objectName="icon-button")
+		resetFont.clicked.connect(lambda: (
+			PREFS.update(font=PARAM["font"]),
+			fontLabel.setText(f"Font ({PREFS['font']})"),
+			elem["main"].updateStylesheet(),
+			menu.setSizes(),
+			))
+
+
+		fontLabel = QPushButton(f"Font ({PREFS['font']})", cursor=Qt.CursorShape.PointingHandCursor)
+		fontLabel.clicked.connect(lambda: (
+			FontView(self, ["font"], [font], menu),
+			setattr(menu, "canHide", False)
+			))
+
+		font = CompoundWidget([fontLabel, resetFont], objectName="compound-row", checkable=False)
+
+
+
+
+		colorElems = {key: (QPushButton(text, cursor=Qt.CursorShape.PointingHandCursor, objectName="color"), text) for key, text in [
+			("foreground", "Text"), 
+			("background", "Background"), 
+			("border", "Border"), 
+			]}
+
+		styleBtn = lambda btn, key: btn.setStyleSheet(f"background-color: {COLOR[key]}; color: {QColor(*[255 - i for i in QColor(COLOR[key]).getRgb()[:-1]]).name()};")
+
+		for key, (btn, text) in colorElems.items():
+			styleBtn(btn, key)
+			btn.clicked.connect(lambda _, btn=btn, key=key: (
+				ColorPicker(self, COLOR[key], [key], [btn], menu),
+				setattr(menu, "canHide", False)
+				))
+
+
+
+
+		menu = DropdownMenu(self, self.settings, [], [], customRows=[theme, font] + [btn for btn, _ in colorElems.values()], keepOpen=True)
+
+
+
+
+
+
+
+
+	def setTheme(self):
+		val = 10
+		for key in [
+			"foreground", 
+			"background", 
+			"border", 
+			]:
+			(color := QColor(COLOR[key])).setHsv(color.hue(), color.saturation(), (v := (255 - color.value())) + (val if v <= 255 - val else -val))
+
+			COLOR[key] = color.name()
+		elem["main"].updateStylesheet()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

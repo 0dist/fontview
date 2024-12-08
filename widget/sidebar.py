@@ -14,246 +14,87 @@ from main import *
 
 
 
-class ContextMenu(QMenu):
-	def __init__(self, parent, item):
-		super().__init__()
-		layout = QVBoxLayout()
-		element["main"].resetMargins(layout)
-
-
-		revealRow = QPushButton()
-		revealRow.setObjectName("button")
-		revealRow.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-		revealRow.clicked.connect(lambda: parent.revealFile(item.data(100)))
-		revealLay = QHBoxLayout()
-
-		icon = QLabel("\uE005")
-		icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-		icon.setFont(QFont("fontview-icons"))
-
-		revealLay.addWidget(icon)
-		revealLay.addWidget(QLabel("Open in Folder"))
-		revealRow.setLayout(revealLay)
-		# label gets cuf off from full width
-		revealRow.adjustSize()
-		self.setObjectName("context")
-
-
-		layout.addWidget(revealRow)
-		self.setLayout(layout)
 
 
 
 
 
 
+class ItemScroll(QScrollArea):
+	def __init__(self, parent, key, fixedHeight=True, acceptDrops=True):
+		super().__init__(parent)
+		self.setObjectName("item-scroll")
+		self.setWidgetResizable(True)
+		self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+		self.key = key
+		self.acceptDrops = acceptDrops
 
-
-class TreeItem(QStandardItem):
-	def __init__(self, text):
-		super().__init__()
-		self.setText(text)
-		self.setEditable(False)
-		self.setCheckable(False)
-
-
-		font = QFont("fontview-icons, "+QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont).family()+"")
-		self.setFont(font)
-
-
-
-
-
-
-class DelegateTree(QStyledItemDelegate):
-	def __init__(self, parent):
-		super().__init__()
-		self.parent = parent
-		self.root = self.parent.rootIndex()
-
-	def initStyleOption(self, option, index):
-		text = index.data(0)
-		folder = index.data(120)
-		if folder:
-			icon = "\uE002\u0020" if self.parent.isExpanded(index) else "\uE001\u0020"
-		else:
-			icon = "\uE003\u0020" if index.data(110) == "ttf" else "\uE004\u0020"
-		super().initStyleOption(option, index)
-
-		i = 1
-		while index.parent() != self.root:
-			index = index.parent()
-			i += 1
-		i = i - 1 if folder else i
-
-		option.text = "\u0020\u0020\u0020\u0020\u0020" * i + icon + text
+		self.layout = QVBoxLayout(contentsMargins=QMargins(), spacing=0)
+		self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
 
 
 
 
-class TreePath(QTreeView):
-	def __init__(self, data):
-		super().__init__()
-		self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-		self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-		self.setObjectName("tree")
+		for i in PREFS[key]:
+			self.layout.addWidget(self.userRow(os.path.basename(i), path=i) if "folder" in key else self.userRow(i))
 
-		self.setItemDelegate(DelegateTree(self))
-		self.setIndentation(0)
-		self.setHeaderHidden(True)
-		self.setExpandsOnDoubleClick(False)
-		self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+		self.addWidget = lambda text, path=None: self.layout.insertWidget(self.layout.count() - 1, self.userRow(text, path))
+		self.initAddBtn = lambda: self.layout.addWidget(btn := QPushButton(ICON["plus"], objectName="icon-button")) or btn
+	
 
-		model = QStandardItemModel()
-		# rootModel = model.invisibleRootItem()
-		self.setModel(model)
+	
+
+		container = QWidget(objectName="sidebar-container")
+		if fixedHeight:
+			container.resizeEvent = lambda e: self.adjustHeight()
+			elem["main"].fontSizeChanged.connect(self.adjustHeight)
+		container.setLayout(self.layout)
+		self.setWidget(container)
+
 
 		
 
-		dirList = []
-		for root, dirs, files in os.walk(DATA["path"]):
-			for d in dirs:
-				path = QDir.toNativeSeparators(root + "/" + d)
-				file = QFileInfo(path)
-				item = TreeItem(file.completeBaseName())
-				item.setData(path, 100)
-				item.setData(True, 120) # if folder
-
-				appendTo = model
-				for i in dirList:
-					if root == i.data(100):
-						appendTo = i
-						break
-				appendTo.appendRow(item)
-				dirList.append(item)
-
-			for f in files:
-				path = QDir.toNativeSeparators(root + "/" + f)
-				suffix = QFileInfo(path).suffix()
-				if suffix in ["ttf", "otf"]:
-					try:
-						ttFont = ttLib.TTFont(path)["name"]
-						typeface = ttFont.getDebugName(16) if ttFont.getDebugName(16) else ttFont.getDebugName(1)
-
-						file = QFileInfo(path)
-						item = TreeItem(file.completeBaseName())
-						for val, slot in [(path, 100), (suffix, 110), (typeface, 130)]:
-							item.setData(val, slot)
-
-
-						appendTo = model
-						for i in dirList:
-							if root == i.data(100):
-								appendTo = i
-								break
-						appendTo.appendRow(item)
-					except Exception as e:
-						print(e)
-
-		# restore tree state
-		self.iterateTree(func = "", parent = False)
-
-
-
-	def iterateTree(self, func, parent):
-		model = self.model()
-		parent = self.model().invisibleRootItem().index() if not parent else parent
-		items = [parent]
-
-
-		state = []
-		typeface = []
-		while items:
-			parent = items.pop()
-			for i in range(model.rowCount(parent)):
-				item = model.index(i, 0, parent)
-				if item.data(120):
-					# "unique" id to track expanded folders
-					created = QFileInfo(item.data(100)).birthTime().toMSecsSinceEpoch()
-					if func == "save" and self.isExpanded(item):
-						state.append(created)
-					elif not func:
-						try:
-							self.expand(item) if created in DATA["treeState"] else None
-						except:
-							pass
-
-				elif item.data(130):
-					typeface.append(item.data(130))
-				items.append(item)
-
-		match func:
-			case "save":
-				DATA["treeState"] = state
-			case "get":
-				return set(typeface)
 
 
 
 
 
-	def mouseReleaseEvent(self, e):
-		item = self.indexAt(e.pos())
-		if e.button() == Qt.MouseButton.LeftButton and item.data(120):
-			self.expand(item) if not self.isExpanded(item) else self.collapse(item)
+	def sizeHint(self):
+		return QSize(super().sizeHint().width(), self.maximumHeight())
 
+	def adjustHeight(self):
+		self.layout.itemAt(self.layout.count() - 1).widget().setFixedHeight(self.layout.itemAt(0).widget().height())
 
-			sidebar = element["sidebar"]
-			sidebar.clearWidgets()			
-			element["treeWidget"] = scroll = ScrollLayout(grid = DATA["grid"], glyph = False, info = False)
-			# assign which fonts are in the folder
-			self.model().setData(item, self.iterateTree(func = "get", parent = item), 140) if not item.data(140) else None
-
-			for i in sidebar.data:
-				if i["typeface"] in item.data(140):
-					row = TypefaceRow(data = i, family = False)
-					scroll.addWidget(row)
-
-			element["main"].mainStack.addWidget(scroll)
-			element["main"].mainStack.setCurrentWidget(scroll)
-			for i in [sidebar.total, sidebar.favorites]:
-				i.setChecked(False)
-
-
-		super().mouseReleaseEvent(e)
+		# 6 visible rows
+		maxHeight = self.layout.itemAt(0).widget().sizeHint().height() * 6
+		canScroll = maxHeight < (contentHeight := self.widget().sizeHint().height())
+		self.setFixedHeight(maxHeight if canScroll else contentHeight)
 
 
 
-	def contextMenuEvent(self, context):
-		item = self.indexAt(context.pos())
-		if item.isValid():
-			menu = ContextMenu(self, item)
-			menu.exec(QCursor.pos())
 
+	def userRow(self, text, path=None):
+		(btn := QPushButton(text, checkable=True, checked=False))
+		btn.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
-	def revealFile(self, path):
-		path = QDir.toNativeSeparators(path)
-		match element["platform"]:
-			case "win32":
-				subprocess.Popen("explorer /select, "+path+"")
-			case "darwin":
-				try:
-					subprocess.Popen(["open", "-R", path])
-				except Exception as e:
-					print(e)
-					# open without selection
-					subprocess.Popen(["open", os.path.dirname(path)])
-			case "linux":
-				try:
-					subprocess.Popen(["xdg-open", "--select", path])
-				except Exception as e:
-					print(e)
-					subprocess.Popen(["xdg-open", os.path.dirname(path)])
+		count = QLabel()
 
 
 
-	# def mousePressEvent(self, e):
-	# 	index = self.indexAt(e.pos())
-	# 	if index.isValid() and self.visualRect(index).contains(e.pos()):
-	# 		super().mousePressEvent(e)
-	# 	else:
-	# 		e.ignore()
+		row = CompoundWidget([btn, count], acceptDrops=self.acceptDrops, objectName="scroll-item")
+		row.contextMenuEvent = lambda e: self.rowContext(e, row, btn)
+		row.text = lambda: btn.text()
+		row.scroll = self
+		row.count = lambda: int(count.text())
+		row.path = os.path.normpath(path) if path else path
+
+		row.updateCount = lambda val=0: count.setText(str(len(PREFS[self.key][row.text()]) if "collection" in self.key else val))
+
+		row.updateCount()
+
+		self.parent().btnGroup.addButton(row)
+		return row
 
 
 
@@ -274,24 +115,171 @@ class TreePath(QTreeView):
 
 
 
-class Total(QPushButton):
-	def __init__(self, data, text):
-		super().__init__()
-		self.setObjectName("sidebar-button")
-		self.setCheckable(True)
 
-		layout = QHBoxLayout()
 
-		self.num = QLabel(str(len(data)))
-		layout.addWidget(QLabel(text))
-		layout.setContentsMargins(PADD,0,PADD,0)
-		layout.addStretch(1)
-		layout.addWidget(self.num)
 
-		self.setLayout(layout)
 
-	def updateCount(self, data):
-		self.num.setText(str(len(data)))
+class CollectionScroll(ItemScroll):
+	def __init__(self, parent):
+		super().__init__(parent, "collections")
+		
+		add = self.initAddBtn()
+		add.clicked.connect(lambda: FloatingInput(self.widget(), add, self, key="collections", objectName="collection-input"))
+
+
+		if not PREFS["showCollections"]:
+			self.hide()
+		
+
+
+
+
+
+	def rowContext(self, e, row, btn):
+		menu = ContextMenu(self)
+
+		menu.addRow("Rename", lambda: FloatingInput(row, btn, self, key="collections", objectName="collection-input", replace=True, background=True, text=row.text()))
+
+		if row.count():
+			menu.addRow("Clear", lambda: (
+				PREFS["collections"].update({row.text(): []}),
+				row.updateCount(),
+				row.click() if self.parent().btnGroup.checkedButton() == row else None
+				))
+			menu.addRow("Purge fonts", lambda: self.parent().purgeFonts(row))
+
+		menu.addRow("Delete", lambda: (
+			self.layout.removeWidget(row), 
+			row.deleteLater(), 
+			self.parent().allFonts.click() if self.parent().btnGroup.checkedButton() == row else None,
+			PREFS["collections"].pop(row.text(), None),
+			self.adjustHeight()
+			))
+		menu.exec(e.globalPos())
+
+
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class FolderScroll(ItemScroll):
+	def __init__(self, parent):
+		super().__init__(parent, "folders", fixedHeight=False, acceptDrops=False)
+		
+		self.add = self.initAddBtn()
+		self.add.clicked.connect(lambda: self.addFolder(path) if (path := QFileDialog.getExistingDirectory(self, "Add font directory")) else None)
+		self.add.setAcceptDrops(True)
+
+
+		self.add.dragEnterEvent = lambda e: self.dragFolderIn(e)
+		self.add.dragLeaveEvent = lambda e: self.dragFolderOut(e)
+		self.add.dropEvent = lambda e: self.dropFolder(e)
+
+		if not PREFS["showFolders"]:
+			self.hide()
+		
+
+
+
+
+
+	def addFolder(self, path):
+		path = os.path.normpath(path)
+		if path not in [self.layout.itemAt(i).widget().path for i in range(self.layout.count() - 1)]:
+			self.addWidget(os.path.basename(path), path=path)
+			PREFS["folders"].append(path)
+			elem["main"].queueThread(path)
+
+
+
+	def rowContext(self, e, row, btn):
+		menu = ContextMenu(self)
+
+		menu.addRow("Show in folder", lambda: self.parent().revealFile(row.path))
+
+		menu.addRow("Delete", lambda: (
+			self.layout.removeWidget(row), 
+			row.deleteLater(), 
+			self.parent().allFonts.click() if self.parent().btnGroup.checkedButton() == row else None,
+			PREFS["folders"].remove(row.path),
+			self.removeFolderFonts(row),
+			self.parent().allFonts.updateCount(str(elem["mainStack"].widget(0).scrollLayout.count())),
+			# self.adjustHeight()
+			))
+		menu.exec(e.globalPos())
+
+
+
+
+
+	def removeFolderFonts(self, row):
+		selected = elem["mainStack"].widget(0).selected
+
+		for i in reversed(range((layout := elem["mainStack"].widget(0).scrollLayout).count())):
+			if (w := layout.itemAt(i).widget()).data["folderPath"] == row.path:
+					if w in selected:
+						selected.remove(w)
+					layout.removeWidget(w)
+					w.deleteLater()
+
+
+
+
+
+
+
+
+
+
+	def dragFolderIn(self, e):
+		if all(os.path.isdir(url.toLocalFile()) for url in e.mimeData().urls()):
+			e.accept()
+			self.add.setStyleSheet(f"background-color: {COLOR['selected']}")
+		else:
+			e.ignore()
+
+
+	def dragFolderOut(self, e):
+		self.add.setStyleSheet("")
+
+	def dropFolder(self, e):
+		for i in e.mimeData().urls():
+			self.addFolder(i.toLocalFile())
+		self.add.setStyleSheet("")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -302,198 +290,275 @@ class Total(QPushButton):
 
 
 class Sidebar(QWidget):
-	def __init__(self, data):
+	def __init__(self):
 		super().__init__()
-		element["sidebar"] = self
-		self.data = data
-		self.clearFavorites()
+		elem["sidebar"] = self
 		self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-		# self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 		self.setObjectName("sidebar")
-		self.installEventFilter(self)
+
+		self.setFixedWidth(DATA.get("sidebarWidth", 300))
+		if DATA.get("hideSidebar"):
+			self.hide()
 
 
-		wrapGrid = QGridLayout()
-		element["main"].resetMargins(wrapGrid)
-
-		layout = QVBoxLayout()
-		layout.setSpacing(0)
-		wrapGrid.addLayout(layout,0,0)
-		layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
-		self.setFixedWidth(DATA["sidebarWidth"])
-		self.hide() if DATA["sidebarHide"] else None
-
-
-
-		self.total = Total(data, "All")
-		self.favorites = Total(DATA["favorites"], "Favorites")
-		self.total.clicked.connect(self.clickTotal)
-		self.favorites.clicked.connect(self.clickFavorites)
-
-		btns = [self.total, self.favorites]
-		for b in btns:
-			b.clicked.connect(lambda e, b=b: [i.setChecked(True) if b == i else i.setChecked(False) for i in btns])
-
-
-
-		pathWrap = QPushButton()
-		pathWrap.setObjectName("sidebar-elem")
-		pathWrap.setCursor(Qt.CursorShape.PointingHandCursor)
-		pathWrap.clicked.connect(lambda: self.changePath(QDir.toNativeSeparators(QFileDialog.getExistingDirectory(self, "Select font directory"))))
-
-		pathLabel = QLabel(os.path.basename(DATA["path"]))
-		icon = QPushButton("\uE006")
-		icon.setObjectName("row-icon")
-
-		pathLay = QHBoxLayout()
-		pathLay.setContentsMargins(PADD,0,PADD,0)
-		pathLay.addWidget(icon)
-		pathLay.addWidget(pathLabel)
-		pathLay.addStretch(1)
-
-		pathWrap.setLayout(pathLay)
-
-
-
-
-		self.tree = TreePath(data)
-		self.width = self.width()
-
-		grip = QWidget()
-		grip.setCursor(Qt.CursorShape.SplitHCursor)
-		grip.mouseMoveEvent = self.resizeSidebar
-		grip.setFixedWidth(5)
-		wrapGrid.addWidget(grip,0, 0, Qt.AlignmentFlag.AlignRight)
+		self.wrapGrid = QGridLayout(contentsMargins=QMargins())
+		layout = QVBoxLayout(contentsMargins=QMargins(0,0,1,0), spacing=0)
 	
 
-		for i in [self.total, self.favorites, pathWrap, self.tree]:
-			layout.addWidget(i)
 
-		# set as default
-		self.total.click()
-		self.setLayout(wrapGrid)
+
+
+		self.btnGroup = QButtonGroup(self, exclusive=True)
+		self.btnGroup.buttonClicked.connect(self.switchFontStack)
+
+
+		totalCount = QLabel("0")
+		self.allFonts = CompoundWidget([QLabel("<b>All</b>"), totalCount])
+		self.allFonts.updateCount = lambda val: totalCount.setText(val)
+		elem["main"].threadFinished.connect(lambda data, path: (
+			self.allFonts.updateCount(str(elem["mainStack"].widget(0).scrollLayout.count())),
+			current.click() if (current := self.btnGroup.checkedButton()) != self.allFonts else None,
+			self.updateFolderCount(data, path),
+			))
+
+
+		favCount = QLabel()
+		self.favFonts = CompoundWidget([QLabel("<b>Favorites</b>"), favCount], acceptDrops=True)
+		self.favFonts.contextMenuEvent = lambda e: self.favContext(e, self.favFonts)
+		self.favFonts.path = None
+		self.favFonts.updateCount = lambda val=None: favCount.setText(val or str(len(PREFS["favorites"])))
+		self.favFonts.count = lambda: int(favCount.text())
+		self.favFonts.updateCount()
+
+
+		for btn, text in ((self.allFonts, "all"), (self.favFonts, "favorites")):
+			btn.setObjectName("sidebar-btn")
+			btn.text = lambda text=text: text
+			self.btnGroup.addButton(btn)
+			layout.addWidget(btn)
+
+
+
+
+
+
+
+		createIcon = lambda: (btn := QPushButton(objectName="icon-button")).setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents) or btn
+		updateIcon = lambda btn, key: btn.setText(ICON["shown" if PREFS[key] else "hidden"])
+		toggleWidget = lambda widget, icon, key: (
+			PREFS.update({key: not widget.isVisible()}),
+			widget.show() if PREFS[key] else widget.hide(),
+			updateIcon(icon, key)
+			)
+
+
+		collectionWrap = CollectionScroll(self)
+
+		collectIcon = createIcon()
+		collections = CompoundWidget([QLabel("<b>Collections</b>"), collectIcon], checkable=False, objectName="sidebar-btn")
+		# collections.contextMenuEvent = lambda e: self.collectContext(e, collectionWrap)
+		collections.clicked.connect(lambda: toggleWidget(collectionWrap, collectIcon, "showCollections"))
+
+		updateIcon(collectIcon, "showCollections")
+
+
+
+
+
+
+
+		self.folderWrap = FolderScroll(self)
+		folderIcon = createIcon()
+
+		folders = CompoundWidget([QLabel("<b>Folders</b>"), folderIcon], checkable=False, objectName="sidebar-btn")
+		# applyBorder()
+		folders.clicked.connect(lambda: toggleWidget(self.folderWrap, folderIcon, "showFolders"))
+
+		updateIcon(folderIcon, "showFolders")
+
+
+
+
+
+		layout.addWidget(collections)
+		layout.addWidget(collectionWrap)
+		layout.addWidget(folders, 0, Qt.AlignmentFlag.AlignTop)
+		layout.addWidget(self.folderWrap)
+
+		self.allFonts.setChecked(True)
+
+
+
+
+
+
+
+
+
+		self.grip = grip = QWidget()
+		grip.setMinimumWidth(4)
+		grip.setCursor(Qt.CursorShape.SplitHCursor)
+		grip.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+
+		grip.mouseMoveEvent = self.resizeSidebar
+
+
+
+		self.wrapGrid.addLayout(layout,0,0)
+		self.wrapGrid.addWidget(grip,0,0, Qt.AlignmentFlag.AlignRight)
+	
+		self.setLayout(self.wrapGrid)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	def favContext(self, e, row):
+		menu = ContextMenu(self)
+
+		if row.count():
+			menu.addRow("Clear", lambda: (
+				PREFS.update(favorites=[]),
+				row.updateCount(),
+				row.click() if self.btnGroup.checkedButton() == row else None,
+				elem["mainStack"].currentWidget().update(),
+				elem["mainStack"].widget(0).update()
+				))
+
+			menu.addRow("Purge fonts", lambda: self.purgeFonts(row, isFav=True))
+		menu.exec(e.globalPos())
+
+
+
+	def updateFolderCount(self, data, path):
+		for i in range(self.folderWrap.layout.count() - 1):
+			if (row := self.folderWrap.layout.itemAt(i).widget()).path == os.path.normpath(path):
+				row.updateCount(str(len(data)))
+
+
+
+	def purgeFonts(self, row, isFav=False):
+		layout = elem["mainStack"].widget(0).scrollLayout
+		names = [layout.itemAt(i).widget().data["name"] for i in range(layout.count())]
+		data = PREFS["collections"][row.text()] if not isFav else PREFS["favorites"]
+		purged = list(set(data) & set(names))
+
+
+		if not isFav:
+			PREFS["collections"][row.text()] = purged
+		else:
+			PREFS["favorites"] = purged
+		row.updateCount(str(len(purged)))
+		if self.btnGroup.checkedButton() == row:
+			row.click()
+
+
+
+
+
+
+
+
+
+	def switchFontStack(self, btn):
+		stack = elem["mainStack"]
+		for i in reversed(range(1, 3)):
+			if (widget := stack.widget(i)):
+				stack.removeWidget(widget)
+				widget.deleteLater()
+
+
+		if btn.text() != "all":
+			scroll = ScrollArea()
+			layout = stack.widget(0).scrollLayout
+			if not btn.path:
+				prefData = PREFS["collections"][btn.text()] if btn.text() != "favorites" else PREFS["favorites"]
+			else:
+				prefData = [btn.path]
+
+
+			# no duplicates
+			names = set()
+			widgets = []
+			for i in range(layout.count()):
+				if (w := layout.itemAt(i).widget()).data["name" if not btn.path else "folderPath"] in prefData and w.data["name"] not in names:
+						names.add(w.data["name"])
+						widgets.append(w)
+
+			for n, i in enumerate(widgets):
+				row = FontRow((i.data["name"], i.data), isLast=n==len(widgets) - 1)
+				scroll.addWidget(row)
+				
+
+			stack.addWidget(scroll)
+			stack.setCurrentWidget(scroll)
+		else:
+			stack.setCurrentIndex(0)
+
+
+
+
+
+
+
+
+
+
+
+	def revealFile(self, path):
+		if (osName := elem["platform"]) == "win32":
+			subprocess.Popen(f'explorer /select, "{path}"')
+		elif osName == "darwin":
+			try:
+				subprocess.run(["open", "-R", path], check=True)
+			except subprocess.CalledProcessError as e:
+				print(e)
+				# open without selection
+				subprocess.run(["open", os.path.dirname(path)])
+		elif osName == "linux":
+			try:
+				subprocess.run(["xdg-open", "--select", path], check=True)
+			except subprocess.CalledProcessError as e:
+				print(e)
+				subprocess.run(["xdg-open", os.path.dirname(path)])
+
+
 
 
 
 
 	def resizeSidebar(self, e):
-		x = self.mapFromGlobal(QCursor.pos()).x()
-		if 200 < x < 400:
-			if self.isHidden():
-				self.show()
-				DATA["sidebarHide"] = False
+		x = self.mapFromGlobal(e.globalPosition().toPoint()).x()
+		self.hide() if x < PREFS["fontSize"] * 2 else self.show()
 
-			self.setFixedWidth(x)
-			DATA["sidebarWidth"] = x
-
-		if x < 50 and self.isVisible():
-			DATA["sidebarHide"] = True
-			self.hide()
-
-
-	def clearFavorites(self):
-		fontList = [i["typeface"] for i in self.data]
-		for i in DATA["favorites"][:]:
-			DATA["favorites"].remove(i) if not i in fontList else None
-
-
-
-	def changePath(self, path):
-		if path and path != DATA["path"]:
-			DATA["path"] = path
-			self.thread = Thread()
-			self.thread.finished.connect(self.finilizePath)
-			self.thread.start()
-
-	def finilizePath(self):
-		self.deleteLater()
-		self.clearWidgets()
-
-		for i in element["main"].scroll.items:
-			i.deleteLater()
-		element["main"].scroll.items = []
-		element["main"].generateFonts()
+		minWidth = PREFS["fontSize"] * SC_FACTOR["sidebarMin"]
+		self.setFixedWidth(int(x := max(minWidth, min(x, minWidth * 2))))
+		DATA.update(sidebarWidth=x, hideSidebar=not self.isVisible())
 
 
 
 
-	def clickTotal(self, e):
-		mainStack = element["main"].mainStack
-		if self.favorites.isChecked():
-			mainStack.removeWidget(self.scroll)
-			mainStack.setCurrentWidget(element["main"].scroll)
-			self.restoreStates()
-
-		elif "treeWidget" in element:
-			self.removeTreeWidget(mainStack)
-			element["controls"].restoreStates()
-		self.tree.clearSelection()
-
-
-	def clickFavorites(self, e):
-		mainStack = element["main"].mainStack
-		if self.total.isChecked():
-			self.initFavorites(mainStack)
-
-		elif "treeWidget" in element:
-			self.removeTreeWidget(mainStack)
-			self.initFavorites(mainStack)
-		self.tree.clearSelection()
-
-
-	def initFavorites(self, mainStack):
-		self.scroll = ScrollLayout(grid = DATA["grid"], glyph = False, info = False)
-
-		for i in self.data:
-			if i["typeface"] in DATA["favorites"]:
-				row = TypefaceRow(data = i, family = False)
-				self.scroll.addWidget(row)
-
-		mainStack.addWidget(self.scroll)
-		mainStack.setCurrentWidget(self.scroll)
-		self.restoreStates()
-
-
-
-	def clearWidgets(self):
-		element["controls"].search.setEnabled(True)
-		element["controls"].search.clear()
-
-		self.checkFamily()
-		if "treeWidget" in element:
-			self.removeTreeWidget(element["main"].mainStack)
-		if self.favorites.isChecked():
-			element["main"].mainStack.removeWidget(self.scroll)
-
-
-	def removeTreeWidget(self, mainStack):
-		self.checkFamily()
-		element.pop("treeWidget")
-		mainStack.removeWidget(mainStack.currentWidget())
-
-	def checkFamily(self):
-		element["family"].deleteFamily() if "family" in element else None
-
-	def restoreStates(self):
-		self.checkFamily()
-		element["controls"].restoreStates()
 
 
 
 
-	# def eventFilter(self, obj, e):
-	# 	if e.type() == QEvent.Type.HoverMove:
-	# 		if  e.position().x() > self.geometry().width() - 5:
-	# 			self.setCursor(Qt.CursorShape.SplitHCursor)
-	# 		else:
-	# 			self.setCursor(Qt.CursorShape.ArrowCursor)
 
-	# 	if e.type() == QEvent.Type.MouseMove and self.cursor().shape() == Qt.CursorShape.SplitHCursor:
-	# 		x = round(e.position().x())
-	# 		# min/max width
-	# 		if 200 < x < 400:
-	# 			self.setFixedWidth(x)
-	# 			DATA["sidebarWidth"] = x
 
-	# 	return False
+
+
+
+
+
+
+
+
